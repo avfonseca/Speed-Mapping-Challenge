@@ -4,6 +4,8 @@ from osgeo import osr
 import numpy as np
 import os
 import sys
+import rioxarray as rxr
+import geopandas as gpd
 
 def open_raster(file_name, band_number):
 
@@ -29,44 +31,19 @@ def main(band_number, input_file):
     nodata = band.GetNoDataValue()
     (upper_left_x, x_size, x_rotation, upper_left_y, y_rotation, y_size) = src.GetGeoTransform()
 
-    img_arr = src.ReadAsArray()
 
-    #width,height = numpy_array.shape
-    width= band.XSize
-    height= band.YSize
-
-    # Init the shapefile stuff..
+    driver = ogr.GetDriverByName('ESRI Shapefile')        
+    out_data = driver.CreateDataSource("test.shp")
+    # getting projection from source raster
     srs = osr.SpatialReference()
-    srs.ImportFromWkt(src.GetProjection())
-
-    driver = ogr.GetDriverByName('ESRI Shapefile')
-    shapeData = driver.CreateDataSource('./test.shp')
-
-    layer = shapeData.CreateLayer('ogr_pts', srs, ogr.wkbPoint)
-    layerDefinition = layer.GetLayerDefn()
-    layer.CreateField(ogr.FieldDefn("Bathymetry", ogr.OFTReal))
-
-    for i in range(width):
-        for j in range(height):
-
-            if(img_arr[i,j] != nodata):
-
-                x = i * x_size + upper_left_x + (x_size / 2) #add half the cell size
-                y = j * y_size + upper_left_y + (y_size / 2) #to centre the point
-
-
-                point = ogr.Geometry(ogr.wkbPoint)
-                point.SetPoint(0, x, y)
-
-                feature = ogr.Feature(layerDefinition)
-                feature.SetGeometry(point)
-            
-                feature.SetFID(i)
-                feature.SetField("Bathymetry", img_arr[i,j].astype("float"))
-
-                layer.CreateFeature(feature)
-
-    shapeData.Destroy()
+    srs.ImportFromWkt(src.GetProjectionRef())
+    # create layer with projection
+    out_layer = out_data.CreateLayer(input_file.split('.')[0], srs)        
+    new_field = ogr.FieldDefn('bathymetry', ogr.OFTReal)
+    out_layer.CreateField(new_field)        
+    gdal.FPolygonize(band, band, out_layer, 0, [], callback=None)        
+    out_data.Destroy()
+    src = None
 
 
 if __name__ == '__main__':
@@ -78,21 +55,6 @@ if __name__ == '__main__':
         """)
 
     main(int(sys.argv[1]), str(sys.argv[2]))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
