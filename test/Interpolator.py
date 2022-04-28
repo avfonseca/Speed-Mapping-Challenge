@@ -17,8 +17,13 @@ class Interpolator():
         self.interp, self.sdarr = self.create_raster()
 
 
-    def _in_ellipse(self, px, x, py, y, a, b):
-        z = ((px-x)**2)/a**2 + ((py-y)**2)/b**2
+    def _in_ellipse(self, px, x, py, y, a, b, alpha):
+
+        pa = (np.cos(alpha)*(px-x) + np.sin(alpha)*(py-y))/a
+        pb = (np.sin(alpha)*(px-x) + np.cos(alpha)*(py-y))/b
+
+        z = pa**2 + pb**2
+
         if z < 1: 
             return True
         else:
@@ -71,6 +76,8 @@ class Interpolator():
     
         while(len(points) < self.num_points):
 
+            [i**2 for i in range(n)]
+
             pointsa,indicesa,xca,yca = self.find_valid_points(self.sub_array(x,y,a+1,b),a+1,b)
             pointsb,indicesb,xcb,ycb = self.find_valid_points(self.sub_array(x,y,a,b+1),a,b+1)
 
@@ -109,11 +116,13 @@ class Interpolator():
 
         for i in range(self.arr_shape[0]):
             for j in range(self.arr_shape[1]):
-                
-                value,dist = self.find_shoalest(i,j)
 
-                interp[i,j] = value
-                sdarr[i,j] = dist
+                if self.arr[i,j] == self.no_data:
+                
+                    value,dist = self.find_shoalest(i,j)
+
+                    interp[i,j] = value
+                    sdarr[i,j] = dist
 
         return interp, sdarr
         

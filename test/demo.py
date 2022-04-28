@@ -1,47 +1,33 @@
 import numpy as np
 from cmath import sqrt
-import gdal
-
-
-
-def open_raster(file_name, band_number):
-
-    try:
-        raster = gdal.Open(file_name)
-    except RuntimeError as e:
-        print("ERROR: Cannot open raster.")
-        print(e)
-        return None
-
-    try:
-        raster_band = raster.GetRasterBand(band_number)
-    except RuntimeError as e:
-        print("ERROR: Cannot access raster band.")
-        print(e)
-        return None
-    return raster, raster_band
+from scipy import interpolate
 
 
 no_data = 0
 arr = np.array([[0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0,0],
-                [0,-6,-5,-3,-23,-1,-2,-3,0],
-                [0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0,0],
+                [0,0,2,0,0,0,0,0,0],
+                [0,0,1,0,0,0,0,0,0],
+                [0,0,0,3,0,0,0,0,0],
+                [0,-6,-5,-3,-0,-1,-2,-3,0],
+                [0,0,0,0,0,3,0,0,0],
+                [0,0,0,4,0,0,32,0,0],
                 [0,0,0,0,0,0,0,0,0],
                 [0,0,0,0,0,0,0,0,0]])
 arr_shape = arr.shape
 interp = np.zeros(arr_shape)
 sdarr = np.zeros(arr_shape)
 
-def _in_ellipse(px, x, py, y, a, b):
-        z = ((px-x)**2)/a**2 + ((py-y)**2)/b**2
-        if z <= 1: 
+def _in_ellipse(px, x, py, y, a, b, alpha):
+
+    pa = (np.cos(alpha)*(px-x) + np.sin(alpha)*(py-y))/a
+    pb = (np.sin(alpha)*(px-x) + np.cos(alpha)*(py-y))/b
+
+    z = pa**2 + pb**2
+
+    if z <= 1: 
             return True
-        else:
-            return False
+    else:
+        return False
 
 def _edge_case(x,y,a,b):
     if((x > a-1 and y > b-1) and (arr_shape[0] - x > a and arr_shape[1] - y > b)):
@@ -54,82 +40,119 @@ def null_padding(arr,x,y):
 
 def sub_array(x,y,a,b):
 
-    if(_edge_case(x,y,a,b)):
-        temp = null_padding(arr,a,b)
-        sub_arr = temp[x:x+2*a+1,y:y+2*b+1]
+    c = max(a,b)
+
+    if(_edge_case(x,y,c,c)):
+        temp = null_padding(arr,c,c)
+        sub_arr = np.copy(temp[x:x+2*c+1,y:y+2*c+1])
     else:
-        sub_arr = arr[x-a:x+a+1,y-b:y+b+1]
+        sub_arr = np.copy(arr[x-c:x+c+1,y-c:y+c+1])
         
     return sub_arr
 
    
-def find_valid_points(sub_arr,a,b):
+def find_valid_points(sub_arr,a,b,alpha):
 
-    values = []
-    indices = []
+    num = 0
 
     xc = int(sub_arr.shape[0]/2)
     yc = int(sub_arr.shape[1]/2)
 
     for i in range(sub_arr.shape[0]):
         for j in range(sub_arr.shape[1]):
-            if (_in_ellipse(i,xc,j,yc,a,b) and sub_arr[i,j] != no_data):
-                values.append(sub_arr[i,j])
-                indices.append((i,j))
+            if (_in_ellipse(i,xc,j,yc,a,b,alpha) and sub_arr[i,j] != no_data):
+                    num = num + 1
 
-    return values,indices,xc,yc
+    return num
 
 
-def find_points(x,y):
+def find_area(x,y):
+    
     a = 1
     b = 1
 
-    points, indices, xc, yc = find_valid_points(sub_array(x,y,a,b),a,b)
+    phase = np.arange(0,360,10)*np.pi/180
+
+    sub = sub_array(x,y,a,b)
+    max_len = find_valid_points(sub,a,b,0)
+    p_out = 0
+
     
-    while(len(points) < 5):
+    while(max_len < 5):
 
-        pointsa,indicesa,xca,yca = find_valid_points(sub_array(x,y,a+1,b),a+1,b)
-        pointsb,indicesb,xcb,ycb = find_valid_points(sub_array(x,y,a,b+1),a,b+1)
+        
+        sub_a = sub_array(x,y,a+1,b)
+        sub_b = sub_array(x,y,a,b+1)
+ 
+        a_list = [find_valid_points(sub_a,a+1,b,p) for p in phase]
+        max_a = max(a_list)
+        p_outa = phase[a_list.index(max_a)]
 
-        if(len(pointsa) > len(pointsb)):
-            points = pointsa
-            indices = indicesa
-            xc,yc = xca,yca
-            a = a+1
+             
+        b_list = [find_valid_points(sub_b,a,b+1,p) for p in phase]
+        max_b = max(b_list)
+        p_outb = phase[b_list.index(max_b)]
+
+            
+        if(max_a > max_b):
+            sub = sub_a
+            p_out = p_outa
+            a = a + 1
+            max_len = max_a
         else:
-            points = pointsb
-            indices = indicesb
-            xc,yc = xcb,ycb
-            b = b+1
+            sub = sub_b
+            p_out = p_outb
+            b = b + 1
+            max_len = max_b        
 
-    return points, indices, xc, yc
-
-
-def find_shoalest(x,y):
         
-    points, indices, xc, yc = find_points(x,y)
-    max_value = max(points)
-    max_index = points.index(max_value)
+    return sub, a, b, p_out
 
-    print(xc,yc,indices[max_index])
 
-    dist = abs(sqrt(xc - indices[max_index][0])**2 + (yc - indices[max_index][1])**2)
-    std = np.std(np.array(points))
+def interpolate_missing(x,y):
 
-    norm_dist = dist/std
+        
+    sub, a, b, p = find_area(x,y)
 
-    return max_value, dist, norm_dist
+    sub = sub.astype("float")
+
+    xc = int(sub.shape[0]/2)
+    yc = int(sub.shape[1]/2)
+
+    for i in range(sub.shape[0]):
+        for j in range(sub.shape[1]):
+            if (not _in_ellipse(i,xc,j,yc,a,b,p)):
+                sub[i,j] = no_data
+            
+            if(sub[i,j] == no_data):
+                sub[i,j] = np.nan
+
+    xs = np.arange(0, sub.shape[1])
+    ys = np.arange(0, sub.shape[0])
+
+    array = np.ma.masked_invalid(sub)
+    xx, yy = np.meshgrid(xs, ys)
+
+    x1 = xx[~array.mask]
+    y1 = yy[~array.mask]
+    newarr = array[~array.mask]
+
+    GD1 = interpolate.griddata((x1, y1), newarr.ravel(),
+                          (xx, yy),
+                             method='cubic')
+
+    return GD1[xc,yc]
 
     
-def create_raster():
+#def create_raster():
+#
+ #       for i in range(arr_shape[0]):
+  #          for j in range(arr_shape[1]):
+   #             
+    #            value,dist = find_shoalest(i,j)
+#
+ #               interp[i,j] = value
+  #              sdarr[i,j] = dist
 
-        for i in range(arr_shape[0]):
-            for j in range(arr_shape[1]):
-                
-                value,dist = find_shoalest(i,j)
 
-                interp[i,j] = value
-                sdarr[i,j] = dist
-
-        
-print(find_shoalest(4,4))
+print(interpolate_missing(4,4))
