@@ -1,21 +1,23 @@
 import numpy as np
 from cmath import sqrt
 from scipy import interpolate
+from osgeo import ogr
+from osgeo import gdal
+from osgeo import osr
+from PIL import Image
 
 
-no_data = 0
-arr = np.array([[0,0,0,0,0,0,0,0,0],
-                [0,0,2,0,0,0,0,0,0],
-                [0,0,1,0,0,0,0,0,0],
-                [0,0,0,3,0,0,0,0,0],
-                [0,-6,-5,-3,-0,-1,-2,-3,0],
-                [0,0,0,0,0,3,0,0,0],
-                [0,0,0,4,0,0,32,0,0],
-                [0,0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0,0]])
-arr_shape = arr.shape
-interp = np.zeros(arr_shape)
-sdarr = np.zeros(arr_shape)
+#no_data = 0
+#arr = np.array([[0,0,0,0,0,0,0,0,0],
+#                [0,0,2,0,0,0,0,0,0],
+#                [0,0,1,0,0,0,0,0,0],
+#                [0,0,0,3,0,0,0,0,0],
+#                [0,-6,-5,-3,-0,-1,-2,-3,0],
+#                [0,0,0,0,0,3,0,0,0],
+#                [0,0,0,4,0,0,32,0,0],
+#                [0,0,0,0,0,0,0,0,0],
+#                [0,0,0,0,0,0,0,0,0]])
+#arr_shape = arr.shape
 
 def _in_ellipse(px, x, py, y, a, b, alpha):
 
@@ -53,7 +55,7 @@ def sub_array(x,y,a,b):
    
 def find_valid_points(sub_arr,a,b,alpha):
 
-    num = 0
+    values = []
 
     xc = int(sub_arr.shape[0]/2)
     yc = int(sub_arr.shape[1]/2)
@@ -61,9 +63,11 @@ def find_valid_points(sub_arr,a,b,alpha):
     for i in range(sub_arr.shape[0]):
         for j in range(sub_arr.shape[1]):
             if (_in_ellipse(i,xc,j,yc,a,b,alpha) and sub_arr[i,j] != no_data):
-                    num = num + 1
+                    values.append(sub_arr[i,j])
+            else:
+                sub_arr[i,j] = np.nan
 
-    return num
+    return values
 
 
 def find_area(x,y):
@@ -71,39 +75,63 @@ def find_area(x,y):
     a = 1
     b = 1
 
-    phase = np.arange(0,360,10)*np.pi/180
+    eps = 1
+
+    phase = np.arange(0,360,8)*np.pi/180
 
     sub = sub_array(x,y,a,b)
-    max_len = find_valid_points(sub,a,b,0)
+    values = find_valid_points(sub,a,b,0)
+    max_len = len(values)
     p_out = 0
-
     
-    while(max_len < 5):
+    passes = 0
+    while(max_len < 8 and passes < 3):
 
+        a_ = a + eps
+        b_ = b + eps
         
-        sub_a = sub_array(x,y,a+1,b)
-        sub_b = sub_array(x,y,a,b+1)
- 
-        a_list = [find_valid_points(sub_a,a+1,b,p) for p in phase]
-        max_a = max(a_list)
-        p_outa = phase[a_list.index(max_a)]
+        sub_a = sub_array(x,y,a_,b)
+        sub_b = sub_array(x,y,a,b_)
 
-             
-        b_list = [find_valid_points(sub_b,a,b+1,p) for p in phase]
-        max_b = max(b_list)
-        p_outb = phase[b_list.index(max_b)]
+        if(np.count_nonzero(sub_a != no_data) + np.count_nonzero(sub_b != no_data) == 0):
+            passes = passes + 1
+
+        else:
+            if(a_ == b or a == b_):
+                sub = sub_array(x,y,a,b)
+                values = find_valid_points(sub,a,b,0)
+                max_len = len(values)
+                p_out = 0
+
+            else:
+
+                a_list = [find_valid_points(sub_a,a_,b,p) for p in phase]
+                a_len = list(map(len,a_list))
+                max_a = max(a_len)
+                indexa = a_len.index(max_a)
+                p_outa = phase[indexa]
 
             
-        if(max_a > max_b):
-            sub = sub_a
-            p_out = p_outa
-            a = a + 1
-            max_len = max_a
-        else:
-            sub = sub_b
-            p_out = p_outb
-            b = b + 1
-            max_len = max_b        
+            
+                b_list = [find_valid_points(sub_b,a,b_,p) for p in phase]
+                b_len = list(map(len,b_list))
+                max_b = max(b_len)
+                indexb = b_len.index(max_b)
+                p_outb = phase[indexb]
+
+
+                if(max_a > max_b):
+                    sub = sub_a
+                    p_out = p_outa
+                    a = a_
+                    max_len = max_a
+                    passes = 0
+                else:
+                    sub = sub_b
+                    p_out = p_outb
+                    b = b_
+                    max_len = max_b
+                    passes = 0      
 
         
     return sub, a, b, p_out
@@ -119,40 +147,73 @@ def interpolate_missing(x,y):
     xc = int(sub.shape[0]/2)
     yc = int(sub.shape[1]/2)
 
-    for i in range(sub.shape[0]):
-        for j in range(sub.shape[1]):
-            if (not _in_ellipse(i,xc,j,yc,a,b,p)):
-                sub[i,j] = no_data
-            
-            if(sub[i,j] == no_data):
-                sub[i,j] = np.nan
+    if(np.count_nonzero(~np.isnan(sub)) > 3):
 
-    xs = np.arange(0, sub.shape[1])
-    ys = np.arange(0, sub.shape[0])
+        xs = np.arange(0, sub.shape[1])
+        ys = np.arange(0, sub.shape[0])
 
-    array = np.ma.masked_invalid(sub)
-    xx, yy = np.meshgrid(xs, ys)
+        array = np.ma.masked_invalid(sub)
+        xx, yy = np.meshgrid(xs, ys)
 
-    x1 = xx[~array.mask]
-    y1 = yy[~array.mask]
-    newarr = array[~array.mask]
+        x1 = xx[~array.mask]
+        y1 = yy[~array.mask]
+        newarr = array[~array.mask]
 
-    GD1 = interpolate.griddata((x1, y1), newarr.ravel(),
+        GD1 = interpolate.griddata((x1, y1), newarr.ravel(),
                           (xx, yy),
-                             method='cubic')
+                                method='cubic')
 
-    return GD1[xc,yc]
+        output = GD1[xc,yc]
+
+        if (output == np.nan):
+            output = no_data
+
+    else:
+            output = no_data
+
+    return output
 
     
-#def create_raster():
-#
- #       for i in range(arr_shape[0]):
-  #          for j in range(arr_shape[1]):
-   #             
-    #            value,dist = find_shoalest(i,j)
-#
- #               interp[i,j] = value
-  #              sdarr[i,j] = dist
+def create_raster():
+
+    interp = np.zeros(arr_shape)
+
+    for i in range(arr_shape[0]):
+        for j in range(arr_shape[1]):   
+            if(arr[i,j] == no_data):
+                #print(f"interpolating! {i}x{j}")
+                interp[i,j] = interpolate_missing(i,j)
+            else:
+                #print(f"this pixel exists! {i}x{j}")
+                interp[i,j] = arr[i,j]
+
+    return interp
 
 
-print(interpolate_missing(4,4))
+def open_raster(file_name, band_number):
+
+    try:
+        raster = gdal.Open(file_name)
+    except RuntimeError as e:
+        print("ERROR: Cannot open raster.")
+        print(e)
+        return None
+
+    try:
+        raster_band = raster.GetRasterBand(band_number)
+    except RuntimeError as e:
+        print("ERROR: Cannot access raster band.")
+        print(e)
+        return None
+    return raster, raster_band
+
+
+
+src, band = open_raster('NONNA10_4840N08920W.tiff',1)
+    
+no_data = band.GetNoDataValue()
+arr = src.ReadAsArray()
+arr_shape = arr.shape
+
+np.savetxt("input.txt", arr)
+np.savetxt("output.txt", create_raster())
