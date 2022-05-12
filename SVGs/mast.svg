@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="992" height="744" viewBox="0 0 640 480" xml:space="preserve">
+<desc>Created with Fabric.js 3.6.3</desc>
+<defs>
+</defs>
+<g transform="matrix(22.49 0 0 22.49 174.43 283.06)"  >
+<path style="stroke: rgb(43,42,41); stroke-width: 0.04; stroke-dasharray: none; stroke-linecap: butt; stroke-dashoffset: 0; stroke-linejoin: miter; stroke-miterlimit: 4; fill: rgb(43,42,41); fill-rule: evenodd; opacity: 1;"  transform=" translate(-3.76, -3.76)" d="m 0.02098 3.76 c 0 -2.0689 1.6752 -3.7391 3.7409 -3.7391 s 3.7391 1.6745 3.7391 3.7391 s -1.6711 3.7409 -3.7391 3.7409 s -3.7409 -1.672 -3.7409 -3.7409 z m 0.43697 0 c 0 1.8284 1.4754 3.3039 3.3039 3.3039 c 1.8284 0 3.3021 -1.4769 3.3021 -3.3039 s -1.4752 -3.3021 -3.3021 -3.3021 c -1.827 0 -3.3039 1.4737 -3.3039 3.3021 z m 2.9469 0.0017833 c 0 0.19213 0.16377 0.35525 0.35525 0.35525 s 0.35527 -0.16272 0.35527 -0.35525 s -0.16213 -0.35527 -0.35527 -0.35527 s -0.35525 0.16314 -0.35525 0.35527 z" stroke-linecap="round" />
+</g>
+<g transform="matrix(7.84 0 0 7.84 345.92 287.97)" style=""  >
+		<text xml:space="preserve" font-family="'Open Sans', sans-serif" font-size="18" font-style="normal" font-weight="normal" style="stroke: none; stroke-width: 1; stroke-dasharray: none; stroke-linecap: butt; stroke-dashoffset: 0; stroke-linejoin: miter; stroke-miterlimit: 4; fill: rgb(0,0,0); fill-rule: nonzero; opacity: 1; white-space: pre;" ><tspan x="-20.59" y="5.65" >Mast</tspan></text>
+</g>
+</svg>
